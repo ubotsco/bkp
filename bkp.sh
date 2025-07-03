@@ -55,11 +55,9 @@ case "${cmd}" in
     file="$2"
     [ -z "${file}" ] && fatal "Usage: $0 restore FILE"
 
-
     path="s3://${S3_BUCKET}/${file}"
     echo "--> Downloading ${path}"
     aws s3 cp "${path}" - | gzip -d > "dump.sql"
-
 
     echo "--> Recreating database ${PGDATABASE}"
     dropdb --force --if-exists "${PGDATABASE}"
@@ -69,11 +67,30 @@ case "${cmd}" in
     psql -f "dump.sql"
     ;;
 
+  cleanup)
+    age=$((30*24*60*60))
+    cutoff=$(date -u -d "@$(( $(date +%s) - ${age} ))" +"%Y-%m-%dT%H:%M:%SZ")
+
+    aws s3api list-objects-v2 --bucket "${S3_BUCKET}" \
+      --query "Contents[?LastModified<='${cutoff}'].[Key,LastModified]" \
+      --output text |
+    while read -r key modified; do
+      echo "--> Deleting: ${key}"
+      aws s3 rm "s3://${S3_BUCKET}/${key}"
+    done
+    ;;
+
+  backup-cleanup)
+    $0 backup
+    $0 cleanup
+    ;;
+
   *)
     echo "Usage: $0 COMMAND"
     echo "  $0 backup"
-    echo "  $0 list"
     echo "  $0 restore FILE"
+    echo "  $0 list"
+    echo "  $0 cleanup"
     exit 1
     ;;
 esac
