@@ -1,4 +1,5 @@
-FROM postgres:17-alpine
+ARG PGVERSION=17
+FROM postgres:${PGVERSION}-alpine
 
 RUN apk add --no-cache aws-cli
 
